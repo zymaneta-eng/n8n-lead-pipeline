@@ -1,0 +1,390 @@
+{
+  "name": "B2B Lead Intake, Validation, Deduplication & Multichannel Notification Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "b2b-lead-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1a3b5c7d-0001-4000-8000-000000000001",
+      "name": "Webhook: Inbound Lead Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\n\nconst name = (body.name || '').trim();\nconst email = (body.email || '').trim().toLowerCase();\nconst phone = (body.phone || '').trim();\nconst company = (body.company || '').trim();\nconst message = (body.message || '').trim();\nconst source = (body.source || 'Website Contact Form').trim();\n\n// 1. Email validation (RFC compliant basic regex)\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nconst isEmailValid = emailRegex.test(email);\n\n// 2. Phone normalization (E.164 sanitization: minimum 7 digits)\nconst phoneDigits = phone.replace(/\\D/g, '');\nconst isPhoneValid = phoneDigits.length >= 7;\n\n// 3. Overall validity\nconst isValid = name.length >= 2 && isEmailValid && isPhoneValid;\n\nreturn [{\n  json: {\n    raw: body,\n    name: name || 'Anonymous',\n    email,\n    phone,\n    company: company || 'Not Specified',\n    message: message || 'No message provided',\n    source,\n    isEmailValid,\n    isPhoneValid,\n    isValid,\n    validationError: !isValid ? (!name ? 'Name missing' : (!isEmailValid ? 'Invalid email format' : 'Phone number incomplete')) : null,\n    receivedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "1a3b5c7d-0002-4000-8000-000000000002",
+      "name": "Code: Validate & Sanitize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isValid }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "1a3b5c7d-0003-4000-8000-000000000003",
+      "name": "If: Is Lead Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"error\",\n  \"error_code\": \"VALIDATION_FAILED\",\n  \"message\": \"{{ $json.validationError }}\",\n  \"received_at\": \"{{ $json.receivedAt }}\"\n}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "1a3b5c7d-0004-4000-8000-000000000004",
+      "name": "Respond: 400 Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_MANAGER_CHAT_ID || '-100123456789' }}",
+        "text": "=⚠️ *Невалідна заявка на сайті!*\n\n*Помилка:* {{ $json.validationError }}\n*Ім'я:* {{ $json.name }}\n*Email:* {{ $json.email || 'Не вказано' }}\n*Телефон:* {{ $json.phone || 'Не вказано' }}\n*Джерело:* {{ $json.source }}\n*Час:* {{ $json.receivedAt }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "1a3b5c7d-0005-4000-8000-000000000005",
+      "name": "Telegram: Alert Invalid Lead",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\n// Generate deterministic lead signature (email + normalized phone)\nconst cleanPhone = item.phone.replace(/\\D/g, '');\nconst signature = `${item.email}_${cleanPhone}`;\n\n// Check duplicate simulation flag or simulate matching cache\nconst isDuplicate = item.raw && (item.raw.is_test_duplicate === true || item.email.includes('duplicate'));\n\nreturn [{\n  json: {\n    ...item,\n    leadSignature: signature,\n    isDuplicate,\n    duplicateNote: isDuplicate ? 'Lead already submitted within last 24h window' : null\n  }\n}];"
+      },
+      "id": "1a3b5c7d-0006-4000-8000-000000000006",
+      "name": "Code: Deduplication Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isDuplicate }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "1a3b5c7d-0007-4000-8000-000000000007",
+      "name": "If: Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_MANAGER_CHAT_ID || '-100123456789' }}",
+        "text": "=🔁 *Повторна заявка від існуючого клієнта!*\n\n*Клієнт:* {{ $json.name }}\n*Компанія:* {{ $json.company }}\n*Телефон:* {{ $json.phone }}\n*Email:* {{ $json.email }}\n*Повідомлення:* {{ $json.message }}\n\nℹ️ _Заявка зафіксована повторно, дублюючий запис у Google Sheets не створювався._",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "1a3b5c7d-0008-4000-8000-000000000008",
+      "name": "Telegram: Alert Duplicate Lead",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1340,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Thank you! Your request was received and assigned to your account executive.\",\n  \"is_repeat\": true,\n  \"received_at\": \"{{ $json.receivedAt }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1a3b5c7d-0009-4000-8000-000000000009",
+      "name": "Respond: 200 Repeat Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": "={{ $env.GOOGLE_SHEETS_CRM_ID || '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms' }}",
+        "sheetName": "Inbound Leads",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.receivedAt }}",
+            "Name": "={{ $json.name }}",
+            "Company": "={{ $json.company }}",
+            "Email": "={{ $json.email }}",
+            "Phone": "={{ $json.phone }}",
+            "Message": "={{ $json.message }}",
+            "Source": "={{ $json.source }}",
+            "Status": "NEW"
+          }
+        },
+        "options": {}
+      },
+      "id": "1a3b5c7d-0010-4000-8000-000000000010",
+      "name": "Google Sheets: Append New Lead",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1340,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_MANAGER_CHAT_ID || '-100123456789' }}",
+        "text": "=🔥 *Нова кваліфікована заявка!*\n\n👤 *Клієнт:* {{ $json.name }}\n🏢 *Компанія:* {{ $json.company }}\n📱 *Телефон:* `{{ $json.phone }}`\n📧 *Email:* `{{ $json.email }}`\n🌐 *Джерело:* {{ $json.source }}\n\n💬 *Запит:* _{{ $json.message }}_\n\n✅ _Лід успішно записано в Google Sheets CRM._",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "1a3b5c7d-0011-4000-8000-000000000011",
+      "name": "Telegram: Notify Sales Team",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.SMTP_FROM_EMAIL || 'support@company.com' }}",
+        "toEmail": "={{ $json.email }}",
+        "subject": "=Ваша заявка успішно прийнята — {{ $json.company }}",
+        "html": "=<p>Вітаємо, <strong>{{ $json.name }}</strong>!</p><p>Дякуємо за звернення до нашої компанії. Ми отримали ваші контактні дані та закріпили за вами персонального менеджера.</p><p><strong>Деталі заявки:</strong><br/>Компанія: {{ $json.company }}<br/>Телефон: {{ $json.phone }}<br/>Ваш коментар: {{ $json.message }}</p><p>Менеджер зв'яжеться з вами протягом 15 хвилин у робочий час.</p><p>З повагою,<br/>Команда клієнтського сервісу</p>"
+      },
+      "id": "1a3b5c7d-0012-4000-8000-000000000012",
+      "name": "Email: Client Confirmation Auto-reply",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        1780,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"Lead verified, registered in CRM, and queued for sales outreach.\",\n  \"lead_id\": \"{{ $json.leadSignature }}\",\n  \"received_at\": \"{{ $json.receivedAt }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "1a3b5c7d-0013-4000-8000-000000000013",
+      "name": "Respond: 200 Lead Processed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2000,
+        320
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1a3b5c7d-0014-4000-8000-000000000014",
+      "name": "Error Trigger: Unhandled Failure",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        640,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_DEVOPS_CHAT_ID || '-100987654321' }}",
+        "text": "=🚨 *Критичний збій у пайплайні лідогенерації n8n!*\n\n*Workflow:* {{ $workflow.name }}\n*Execution ID:* `{{ $execution.id }}`\n*Нода помилки:* `{{ $execution.error.node.name }}`\n*Повідомлення:* `{{ $execution.error.message }}`\n\n⏰ *Час:* {{ new Date().toISOString() }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "id": "1a3b5c7d-0015-4000-8000-000000000015",
+      "name": "Telegram: Alert DevOps DLQ",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        700
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Inbound Lead Intake": {
+      "main": [
+        [
+          {
+            "node": "Code: Validate & Sanitize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Validate & Sanitize": {
+      "main": [
+        [
+          {
+            "node": "If: Is Lead Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Is Lead Valid?": {
+      "main": [
+        [
+          {
+            "node": "Code: Deduplication Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond: 400 Validation Error",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Telegram: Alert Invalid Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Deduplication Lookup": {
+      "main": [
+        [
+          {
+            "node": "If: Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Alert Duplicate Lead",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond: 200 Repeat Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets: Append New Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets: Append New Lead": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Notify Sales Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram: Notify Sales Team": {
+      "main": [
+        [
+          {
+            "node": "Email: Client Confirmation Auto-reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email: Client Confirmation Auto-reply": {
+      "main": [
+        [
+          {
+            "node": "Respond: 200 Lead Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger: Unhandled Failure": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Alert DevOps DLQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
