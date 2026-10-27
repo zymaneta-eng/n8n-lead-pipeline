@@ -124,5 +124,16 @@ python test_webhook_simulator.py
 
 ---
 
+## 👩‍💻 Замовити автоматизацію / Контакти
+Потрібна розробка та впровадження бізнес-процесів у **n8n**, інтеграція CRM (KeyCRM, SalesDrive, HubSpot), Telegram-сповіщень або телефонії?
+
+* 💬 **Прямий зв'язок у Telegram:** [@Nataly_Zyma](https://t.me/Nataly_Zyma)
+* 📧 **Офіційний Email:** `areonixwinter@gmail.com`
+* 🤖 **Бот технічної підтримки:** [@AreonixSupport_bot](https://t.me/AreonixSupport_bot)
+* 💼 **Профіль на Freelancehunt:** [Nataliia_Z2](https://freelancehunt.com/freelancer/Nataliia_Z2.html)
+* 🏢 **Виконавець:** ФОП Зима Н. М. (офіційний договір, рахунок ФОП/ТОВ)
+
+---
+
 ## 📄 Ліцензія
 MIT License. Автор: Наталія Зима (`Nataliia_Z2`). Проєкт підготовлений як демонстраційний кейс для портфоліо на Freelancehunt та Upwork.
