@@ -4,7 +4,7 @@ Webhook Pipeline Simulator & Edge-Case Test Suite.
 Designed to test and demonstrate the n8n Lead Automation Pipeline locally or against a live n8n instance.
 
 Test Cases:
-1. Valid Inbound Lead (Passes validation -> Inserts into CRM -> Alerts Telegram -> Sends Confirmation).
+1. Valid Inbound Lead (Passes validation -> Inserts into CRM -> Dispatches Alert -> Sends Confirmation).
 2. Duplicate Lead (Detected via Email + Phone signature -> Bypasses duplicate sheet row -> Alerts manager).
 3. Invalid Email / Incomplete Phone (Fails validation -> Returns HTTP 400 -> Triggers error alert).
 """
@@ -19,7 +19,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 def simulate_pipeline_logic(payload: dict) -> dict:
-    """Simulates the exact JavaScript code and If logic from the n8n workflow."""
+    """Simulates the exact JavaScript code and condition logic from the n8n workflow."""
     name = str(payload.get("name", "")).strip()
     email = str(payload.get("email", "")).strip().lower()
     phone = str(payload.get("phone", "")).strip()
@@ -39,7 +39,7 @@ def simulate_pipeline_logic(payload: dict) -> dict:
             "http_status": 400,
             "error_code": "VALIDATION_FAILED",
             "message": error_msg,
-            "action_taken": "⚠️ Alerted manager via Telegram of invalid attempt. Webhook returned 400."
+            "action_taken": "⚠️ Alerted team of invalid attempt. Webhook returned 400."
         }
         
     # 2. Deduplication logic
@@ -52,7 +52,7 @@ def simulate_pipeline_logic(payload: dict) -> dict:
             "status": "success",
             "is_repeat": True,
             "lead_signature": lead_sig,
-            "action_taken": "🔁 Duplicate lead identified. Prevented redundant Google Sheets row; alerted account executive."
+            "action_taken": "🔁 Duplicate lead identified. Prevented redundant CRM row; alerted account executive."
         }
         
     # 3. Success path
@@ -60,7 +60,7 @@ def simulate_pipeline_logic(payload: dict) -> dict:
         "http_status": 200,
         "status": "success",
         "lead_id": lead_sig,
-        "action_taken": f"✅ New Lead Verified! Appended to CRM, dispatched Telegram alert to sales team, sent confirmation email to {email}."
+        "action_taken": f"✅ New Lead Verified! Appended to CRM, dispatched alert to sales team, sent confirmation email to {email}."
     }
 
 
@@ -73,42 +73,42 @@ def run_tests():
         {
             "name": "Case 1: Fully Qualified Valid B2B Lead",
             "payload": {
-                "name": "Олександр Мельник",
-                "email": "oleksandr.m@techcorp.ua",
-                "phone": "+380 50 123 4567",
+                "name": "Alexander Miller",
+                "email": "a.miller@techcorp-demo.com",
+                "phone": "+1 415 555 2671",
                 "company": "TechCorp Logistics",
-                "message": "Цікавить підключення корпоративного тарифу на 50 водіїв."
+                "message": "Interested in enterprise licensing and team rollout."
             }
         },
         {
             "name": "Case 2: Duplicate Submission (Within 24 Hours)",
             "payload": {
-                "name": "Олександр Мельник",
-                "email": "oleksandr.m@techcorp.ua",
-                "phone": "+380 50 123 4567",
+                "name": "Alexander Miller",
+                "email": "a.miller@techcorp-demo.com",
+                "phone": "+1 415 555 2671",
                 "company": "TechCorp Logistics",
-                "message": "Повторно надсилаю запит.",
+                "message": "Follow-up regarding our earlier inquiry.",
                 "is_test_duplicate": True
             }
         },
         {
             "name": "Case 3: Incomplete Submission (Invalid Email Format)",
             "payload": {
-                "name": "Іван",
-                "email": "ivan_not_an_email",
-                "phone": "+380 67 000 0000",
+                "name": "John Doe",
+                "email": "john_invalid_address",
+                "phone": "+1 555 000 1111",
                 "company": "Unknown",
-                "message": "Тест"
+                "message": "Test"
             }
         },
         {
             "name": "Case 4: Incomplete Submission (Phone Too Short)",
             "payload": {
-                "name": "Олена",
-                "email": "olena@gmail.com",
+                "name": "Sarah",
+                "email": "sarah@gmail.com",
                 "phone": "123",
                 "company": "Private",
-                "message": "Тест"
+                "message": "Test"
             }
         }
     ]

@@ -70,7 +70,7 @@
     {
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_MANAGER_CHAT_ID || '-100123456789' }}",
-        "text": "=⚠️ *Невалідна заявка на сайті!*\n\n*Помилка:* {{ $json.validationError }}\n*Ім'я:* {{ $json.name }}\n*Email:* {{ $json.email || 'Не вказано' }}\n*Телефон:* {{ $json.phone || 'Не вказано' }}\n*Джерело:* {{ $json.source }}\n*Час:* {{ $json.receivedAt }}",
+        "text": "=⚠️ *Invalid Inbound Lead Submission!*\n\n*Error:* {{ $json.validationError }}\n*Name:* {{ $json.name }}\n*Email:* {{ $json.email || 'N/A' }}\n*Phone:* {{ $json.phone || 'N/A' }}\n*Source:* {{ $json.source }}\n*Timestamp:* {{ $json.receivedAt }}",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
@@ -120,7 +120,7 @@
     {
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_MANAGER_CHAT_ID || '-100123456789' }}",
-        "text": "=🔁 *Повторна заявка від існуючого клієнта!*\n\n*Клієнт:* {{ $json.name }}\n*Компанія:* {{ $json.company }}\n*Телефон:* {{ $json.phone }}\n*Email:* {{ $json.email }}\n*Повідомлення:* {{ $json.message }}\n\nℹ️ _Заявка зафіксована повторно, дублюючий запис у Google Sheets не створювався._",
+        "text": "=🔁 *Duplicate Lead Submission Detected!*\n\n*Client:* {{ $json.name }}\n*Company:* {{ $json.company }}\n*Phone:* {{ $json.phone }}\n*Email:* {{ $json.email }}\n*Message:* {{ $json.message }}\n\nℹ️ _Repeat request logged. Redundant CRM row skipped to preserve data hygiene._",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
@@ -183,7 +183,7 @@
     {
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_MANAGER_CHAT_ID || '-100123456789' }}",
-        "text": "=🔥 *Нова кваліфікована заявка!*\n\n👤 *Клієнт:* {{ $json.name }}\n🏢 *Компанія:* {{ $json.company }}\n📱 *Телефон:* `{{ $json.phone }}`\n📧 *Email:* `{{ $json.email }}`\n🌐 *Джерело:* {{ $json.source }}\n\n💬 *Запит:* _{{ $json.message }}_\n\n✅ _Лід успішно записано в Google Sheets CRM._",
+        "text": "=🔥 *New Qualified Inbound Lead!*\n\n👤 *Client:* {{ $json.name }}\n🏢 *Company:* {{ $json.company }}\n📱 *Phone:* `{{ $json.phone }}`\n📧 *Email:* `{{ $json.email }}`\n🌐 *Source:* {{ $json.source }}\n\n💬 *Message:* _{{ $json.message }}_\n\n✅ _Lead successfully appended to Google Sheets CRM._",
         "additionalFields": {
           "parse_mode": "Markdown"
         }
@@ -201,8 +201,8 @@
       "parameters": {
         "fromEmail": "={{ $env.SMTP_FROM_EMAIL || 'support@company.com' }}",
         "toEmail": "={{ $json.email }}",
-        "subject": "=Ваша заявка успішно прийнята — {{ $json.company }}",
-        "html": "=<p>Вітаємо, <strong>{{ $json.name }}</strong>!</p><p>Дякуємо за звернення до нашої компанії. Ми отримали ваші контактні дані та закріпили за вами персонального менеджера.</p><p><strong>Деталі заявки:</strong><br/>Компанія: {{ $json.company }}<br/>Телефон: {{ $json.phone }}<br/>Ваш коментар: {{ $json.message }}</p><p>Менеджер зв'яжеться з вами протягом 15 хвилин у робочий час.</p><p>З повагою,<br/>Команда клієнтського сервісу</p>"
+        "subject": "=We received your inquiry — {{ $json.company }}",
+        "html": "=<p>Hello <strong>{{ $json.name }}</strong>,</p><p>Thank you for reaching out. We have received your inquiry and assigned it to a dedicated account executive.</p><p><strong>Inquiry Details:</strong><br/>Company: {{ $json.company }}<br/>Phone: {{ $json.phone }}<br/>Your Note: {{ $json.message }}</p><p>A team member will follow up with you within 15 minutes during regular business hours.</p><p>Best regards,<br/>Client Success Team</p>"
       },
       "id": "1a3b5c7d-0012-4000-8000-000000000012",
       "name": "Email: Client Confirmation Auto-reply",
@@ -244,7 +244,7 @@
     {
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_DEVOPS_CHAT_ID || '-100987654321' }}",
-        "text": "=🚨 *Критичний збій у пайплайні лідогенерації n8n!*\n\n*Workflow:* {{ $workflow.name }}\n*Execution ID:* `{{ $execution.id }}`\n*Нода помилки:* `{{ $execution.error.node.name }}`\n*Повідомлення:* `{{ $execution.error.message }}`\n\n⏰ *Час:* {{ new Date().toISOString() }}",
+        "text": "=🚨 *Critical Pipeline Alert (n8n DLQ)!*\n\n*Workflow:* {{ $workflow.name }}\n*Execution ID:* `{{ $execution.id }}`\n*Failing Node:* `{{ $execution.error.node.name }}`\n*Error Message:* `{{ $execution.error.message }}`\n\n⏰ *Timestamp:* {{ new Date().toISOString() }}",
         "additionalFields": {
           "parse_mode": "Markdown"
         }

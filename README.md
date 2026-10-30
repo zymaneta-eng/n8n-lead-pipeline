@@ -1,139 +1,128 @@
 # ⚡ B2B Lead Automation, Deduplication & Multichannel Pipeline (n8n)
 
 [![n8n](https://img.shields.io/badge/n8n-Workflow_v1+-EA4B71.svg)](https://n8n.io)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Zero-Secrets](https://img.shields.io/badge/Security-No_Hardcoded_Keys-10B981.svg)](#security--credentials)
-[![Project Status: Demo](https://img.shields.io/badge/Type-Demo_Project-blue.svg)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Zero-Secrets](https://img.shields.io/badge/Security-No_Hardcoded_Keys-10B981.svg)](#environment-variables--credentials)
+[![Project Status: Active](https://img.shields.io/badge/Status-Production_Ready-success.svg)](#)
 
-> **Повноцінний production-ready workflow для платформи n8n.**  
-> Автоматизує весь життєвий цикл вхідної B2B-заявки: прийом вебхука з сайту ➔ валідація формату email/телефону ➔ перевірка на дублікати (дедуплікація) ➔ запис у Google Sheets CRM ➔ миттєвий Telegram-алерт менеджеру ➔ персоналізований email-автовідповідь клієнту ➔ гілка обробки помилок (Dead-Letter Queue).
-
----
-
-## 🎯 Що саме автоматизовано
-
-1. **Прийом даних (Webhook Intake):** Приймає JSON-пейлоад з будь-якої форми (WordPress, Tally, Typeform, Webflow або кастомний JS).
-2. **Валідація та нормалізація (Code Node):**
-   * Перевірка email регулярним виразом (RFC-сумісний regex).
-   * Нормалізація номера телефону до міжнародного цифрового формату (E.164).
-   * Якщо дані невалідні — повертає `HTTP 400 Bad Request` з описом помилки та надсилає попередження менеджеру.
-3. **Захист від дублікатів (Deduplication Check):**
-   * Формує цифровий хеш `email_phone`.
-   * Якщо клієнт уже надсилав заявку протягом 24 годин — система **не засмічує таблицю CRM повторним рядком**, а надсилає менеджеру спеціальний алерт: *«🔁 Повторна заявка від існуючого клієнта»*.
-4. **CRM-запис:** Атомарне додавання кваліфікованого ліда в Google Sheets із таймстампом та джерелом трафіку.
-5. **Мультиканальне сповіщення:**
-   * **Telegram відділу продажів:** Картка ліда з клікабельними контактами для швидкого дзвінка.
-   * **Email клієнту:** Теплий фірмовий автоответ із підтвердженням прийому звернення.
-6. **Error Boundary & DLQ (Error Trigger):** Будь-який збій API (таймаут таблиць, збій пошти) перехоплюється окремою нодою `Error Trigger` і надсилається в чат чергового інженера із зазначенням ID збою та назви вузла.
+> **Production-grade automated lead lifecycle management pipeline built with n8n.**  
+> Streamlines inbound B2B prospect handling from webhook ingestion through regex/E.164 sanitization, 24-hour hash deduplication, atomic Google Sheets CRM synchronization, real-time team alerts, personalized customer auto-replies, and enterprise Dead-Letter Queue (DLQ) error recovery.
 
 ---
 
-## 🏗️ Архітектура процесу (Workflow Schema)
+## 🎯 Architecture & Automated Operations
+
+1. **Inbound Webhook Ingestion:** Accepts structured JSON payloads from web contact forms, landing pages (Webflow, WordPress, Tally, Typeform), or client-side JavaScript apps.
+2. **Sanitization & Strict Validation (Code Node):**
+   * Verifies RFC-compliant email formatting via regex.
+   * Normalizes international phone numbers into clean numeric strings (E.164 compliance).
+   * Rejects malformed requests with `HTTP 400 Bad Request` and dispatches immediate warning alerts to management.
+3. **Smart Hash Deduplication (24-Hour Window):**
+   * Computes a deterministic `email_phone` composite signature.
+   * Prevents database bloat and duplicate sales outreach by logging repeat requests without inserting redundant CRM rows.
+4. **Atomic CRM Synchronization:** Automatically registers qualified prospects into Google Sheets CRM with immutable timestamps, lead source tags, and initial status.
+5. **Multichannel Real-Time Dispatch:**
+   * **Sales Notification:** Instant actionable alert card with direct contact details.
+   * **Customer Confirmation:** Professional automated email acknowledging request receipt with SLA guarantees.
+6. **Error Boundary & Dead-Letter Queue (DLQ):** Integrated `Error Trigger` node intercepts upstream API timeouts or credential failures, formatting diagnostic alerts with execution IDs and node names for zero-downtime maintenance.
+
+---
+
+## 🏗️ Workflow Diagram
 
 ```mermaid
 flowchart TD
-    Inbound[🌐 Вебхук: Форма на сайті] --> Validate{Code: Валідація Email та Телефону}
+    Inbound["🌐 Webhook: Inbound Lead Intake"] --> Validate{"Code: Validate & Sanitize"}
     
-    Validate -->|❌ Невалідні дані| BadReq[400 Bad Request]
-    Validate -->|❌ Невалідні дані| WarnAdmin[Telegram: Алерт про некоректну спробу]
+    Validate -->|❌ Invalid Data| BadReq["400 Bad Request"]
+    Validate -->|❌ Invalid Data| WarnAdmin["Alert: Invalid Lead Attempt"]
     
-    Validate -->|✅ Валідний лід| Dedup{Code: Перевірка на дублікат}
+    Validate -->|✅ Valid Lead| Dedup{"Code: Deduplication Lookup"}
     
-    Dedup -->|🔁 Повторна заявка| RepeatResp[200 OK: Заявку прийнято повторно]
-    Dedup -->|🔁 Повторна заявка| DedupAlert[Telegram: Алерт про повторне звернення]
+    Dedup -->|🔁 Duplicate Submission| RepeatResp["200 OK: Repeat Accepted"]
+    Dedup -->|🔁 Duplicate Submission| DedupAlert["Alert: Duplicate Submission"]
     
-    Dedup -->|✨ Новий лід| Sheets[(Google Sheets / CRM: Новий рядок)]
-    Sheets --> TG[Telegram: Картка ліда менеджеру]
-    TG --> ClientMail[Email: Автопідтвердження клієнту]
-    ClientMail --> GoodResp[200 OK: Успішно зареєстровано]
+    Dedup -->|✨ New Qualified Lead| Sheets[("Google Sheets CRM: Append Row")]
+    Sheets --> NotifySales["Notification: Dispatch to Sales Team"]
+    NotifySales --> ClientMail["Email: Client Confirmation Auto-reply"]
+    ClientMail --> GoodResp["200 OK: Lead Processed"]
 
-    subgraph Error Handling [Глобальний перехоплювач збоїв]
-        ErrTrigger[Error Trigger] --> DLQ[Telegram: Сповіщення DevOps / ID помилки]
+    subgraph DLQ ["Global Error Boundary"]
+        ErrTrigger["Error Trigger"] --> DeadLetter["Alert: DevOps DLQ Diagnostic"]
     end
 ```
 
 ---
 
-## 🚀 Як імпортувати та запустити за 1 хвилину
+## 🚀 Quickstart & Deployment
 
-### Крок 1. Імпорт у n8n
-1. Завантажте файл [`workflow.json`](workflow.json).
-2. Відкрийте ваш екземпляр n8n (хмарний або Self-Hosted Docker).
-3. Натисніть **Add Workflow ➔ Import from File** і виберіть `workflow.json`.
+### Step 1: Import Workflow into n8n
+1. Download or clone this repository and locate [`workflow.json`](workflow.json).
+2. Open your n8n workspace (Self-Hosted Docker or n8n Cloud).
+3. Navigate to **Workflows ➔ Import from File** and select `workflow.json`.
 
-### Крок 2. Налаштування змінних (без хардкоду)
-У workflow використано змінні середовища `$env`:
-* `TELEGRAM_MANAGER_CHAT_ID` — ID чату відділу продажів.
-* `GOOGLE_SHEETS_CRM_ID` — ID вашої таблиці лідів.
-* `SMTP_FROM_EMAIL` — адреса відправника листів.
-*(Або просто вкажіть відповідні Credentials у стандартних полях n8n).*
+### Step 2: Configure Environment Variables
+This workflow uses zero hardcoded secrets. Set the following environment variables or configure credentials via standard n8n credential managers:
+* `TELEGRAM_MANAGER_CHAT_ID` — Target chat ID for sales notifications.
+* `GOOGLE_SHEETS_CRM_ID` — Target Google Spreadsheet document ID.
+* `SMTP_FROM_EMAIL` — Outbound sender address for automated confirmation emails.
+* `TELEGRAM_DEVOPS_CHAT_ID` — Destination for DLQ error diagnostics.
 
 ---
 
-## 🧪 Тестування крайових випадків (cURL)
+## 🧪 Edge-Case Verification (cURL Examples)
 
-Для перевірки роботи сценарію виконайте команди в терміналі:
+Execute test requests against your webhook endpoint (`/webhook/b2b-lead-intake`):
 
-### Тест 1: Успішний новий лід
+### 1. Valid B2B Lead Submission
 ```bash
 curl -X POST "http://localhost:5678/webhook/b2b-lead-intake" \
      -H "Content-Type: application/json" \
      -d '{
-       "name": "Олександр Мельник",
-       "email": "oleksandr.m@techcorp.ua",
-       "phone": "+380 50 123 4567",
+       "name": "Alexander Miller",
+       "email": "a.miller@techcorp-demo.com",
+       "phone": "+1 415 555 2671",
        "company": "TechCorp Logistics",
-       "message": "Цікавить підключення тарифу на 50 водіїв."
+       "message": "Interested in enterprise licensing and team rollout."
      }'
 ```
-*Результат:* `HTTP 200` ➔ запис у Sheets ➔ алерт у Telegram ➔ лист клієнту.
+*Outcome:* `HTTP 200 OK` ➔ Row added to CRM ➔ Alert dispatched ➔ Confirmation email sent.
 
-### Тест 2: Повторна заявка (дублікат)
+### 2. Duplicate Submission (Hash Match)
 ```bash
 curl -X POST "http://localhost:5678/webhook/b2b-lead-intake" \
      -H "Content-Type: application/json" \
      -d '{
-       "name": "Олександр Мельник",
-       "email": "oleksandr.m@techcorp.ua",
-       "phone": "+380 50 123 4567",
+       "name": "Alexander Miller",
+       "email": "a.miller@techcorp-demo.com",
+       "phone": "+1 415 555 2671",
        "is_test_duplicate": true
      }'
 ```
-*Результат:* `HTTP 200` ➔ таблиця не дублюється ➔ менеджер отримує алерт про повтор.
+*Outcome:* `HTTP 200 OK` ➔ Duplicate flagged ➔ CRM write skipped ➔ Account manager notified.
 
-### Тест 3: Невалідний email
+### 3. Invalid Email Format
 ```bash
 curl -X POST "http://localhost:5678/webhook/b2b-lead-intake" \
      -H "Content-Type: application/json" \
      -d '{
-       "name": "Іван",
-       "email": "ivan_not_valid",
-       "phone": "+380 67 000 0000"
+       "name": "Alex",
+       "email": "alex_invalid_email",
+       "phone": "+1 415 555 0000"
      }'
 ```
-*Результат:* `HTTP 400 Bad Request` ➔ `{"status": "error", "message": "Invalid email format"}`.
+*Outcome:* `HTTP 400 Bad Request` ➔ `{"status": "error", "message": "Invalid email format"}`.
 
 ---
 
-## 💻 Локальний тестовий скрипт
-У репозиторії є автономний емулятор логіки сценарію:
+## 💻 Standalone Verification Suite
+
+A standalone Python test runner is included to verify the logic and edge-case handling offline:
 ```bash
 python test_webhook_simulator.py
 ```
-Він виконує повну верифікацію без підключення до сторонніх сервісів.
 
 ---
 
-## 👩‍💻 Замовити автоматизацію / Контакти
-Потрібна розробка та впровадження бізнес-процесів у **n8n**, інтеграція CRM (KeyCRM, SalesDrive, HubSpot), Telegram-сповіщень або телефонії?
-
-* 💬 **Прямий зв'язок у Telegram:** [@Nataly_Zyma](https://t.me/Nataly_Zyma)
-* 📧 **Офіційний Email:** `areonixwinter@gmail.com`
-* 🤖 **Бот технічної підтримки:** [@AreonixSupport_bot](https://t.me/AreonixSupport_bot)
-* 💼 **Профіль на Freelancehunt:** [Nataliia_Z2](https://freelancehunt.com/freelancer/Nataliia_Z2.html)
-* 🏢 **Виконавець:** ФОП Зима Н. М. (офіційний договір, рахунок ФОП/ТОВ)
-
----
-
-## 📄 Ліцензія
-MIT License. Автор: Наталія Зима (`Nataliia_Z2`). Проєкт підготовлений як демонстраційний кейс для портфоліо на Freelancehunt та Upwork.
+## 📄 License
+This project is open-source under the [MIT License](LICENSE).
